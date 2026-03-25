@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>THE BALANCE PRO - CHIẾN LƯỢC NĂNG LƯỢNG TƯƠNG LAI</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Montserrat:wght@400;700&display=swap');
+
+        :root {
+            --gold: #d4af37;
+            --dark-bg: #0f0f0f;
+            --card-glass: rgba(255, 255, 255, 0.1);
+            --danger: #ff4757;
+            --success: #2ed573;
+        }
+
+        body {
+            margin: 0; background: var(--dark-bg); color: #fff;
+            font-family: 'Montserrat', sans-serif; overflow: hidden;
+        }
+
+        /* --- MÀN HÌNH CHỜ CINEMATIC --- */
+        #intro-layer {
+            position: fixed; inset: 0; background: #000; z-index: 1000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: 1.5s ease-in-out;
+        }
+        .title-glow {
+            font-family: 'Playfair Display', serif; font-size: 5rem; color: var(--gold);
+            text-shadow: 0 0 20px rgba(212, 175, 55, 0.5); margin: 0;
+        }
+
+        /* --- BẢN ĐỒ BOARD GAME --- */
+        #main-game {
+            display: none; height: 100vh; grid-template-columns: 1fr 350px;
+        }
+
+        #board-container {
+            padding: 40px; display: grid; grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(4, 1fr); gap: 10px; background: #1a1a1a;
+            border-right: 2px solid var(--gold);
+        }
+
+        .slot {
+            border: 1px solid #333; background: #222; border-radius: 8px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            position: relative; transition: 0.3s; text-align: center; padding: 5px;
+        }
+        .slot-active { border-color: var(--gold); box-shadow: inset 0 0 10px rgba(212, 175, 55, 0.2); }
+        .slot-label { font-size: 0.7rem; color: #888; margin-top: 5px; }
+
+        .pawn-container {
+            display: flex; flex-wrap: wrap; gap: 2px; position: absolute; bottom: 5px;
+        }
+        .pawn {
+            width: 15px; height: 15px; border-radius: 50%; border: 2px solid #fff;
+            transition: 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        /* --- BẢNG ĐIỀU KHIỂN --- */
+        #side-panel {
+            background: #0a0a0a; padding: 20px; display: flex; flex-direction: column;
+        }
+        .team-card {
+            background: var(--card-glass); padding: 15px; border-radius: 10px;
+            margin-bottom: 15px; border-left: 4px solid #fff;
+        }
+        .bar-bg { background: #000; height: 8px; border-radius: 4px; margin-top: 5px; }
+        .bar-fill { height: 100%; width: 0%; border-radius: 4px; transition: 1s; }
+
+        /* --- POPUP THẺ BÀI --- */
+        #card-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+            display: none; align-items: center; justify-content: center; z-index: 500;
+        }
+        .action-card {
+            background: #1e1e1e; border: 2px solid var(--gold); width: 450px;
+            padding: 40px; border-radius: 20px; text-align: center;
+            animation: cardIn 0.5s ease-out;
+        }
+        @keyframes cardIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .btn-invest {
+            padding: 12px 30px; background: var(--gold); border: none;
+            color: #000; font-weight: bold; cursor: pointer; border-radius: 5px;
+        }
+        .btn-skip {
+            padding: 12px 30px; background: transparent; border: 1px solid #555;
+            color: #888; cursor: pointer; border-radius: 5px; margin-left: 10px;
+        }
+
+        /* --- HIỆU ỨNG RUNG --- */
+        .shake { animation: shake 0.5s; }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px); }
+            20% { transform: translate(-3px, 0px); }
+            40% { transform: translate(3px, 2px); }
+            100% { transform: translate(0, 0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="intro-layer">
+        <h1 class="title-glow">THE BALANCE</h1>
+        <p style="color: #666; letter-spacing: 3px;">HÀNH TRÌNH ĐẾN ĐIỂM CÂN BẰNG</p>
+        <button class="btn-invest" style="margin-top: 30px;" onclick="startGame()">KHỞI CHẠY HỆ THỐNG</button>
+    </div>
+
+    <div id="main-game">
+        <div id="board-container"></div>
+        
+        <div id="side-panel">
+            <h2 style="color: var(--gold); border-bottom: 1px solid var(--gold); padding-bottom: 10px;">THÔNG SỐ</h2>
+            <div id="teams-list"></div>
+            
+            <div style="margin-top: auto; text-align: center;">
+                <p id="turn-display" style="color: var(--gold);">Đến lượt: Phe Thành Phố</p>
+                <button class="btn-invest" id="dice-btn" onclick="handleRoll()">ĐỔ XÚC XẮC</button>
+                <h1 id="dice-val" style="margin: 10px 0;">?</h1>
+            </div>
+        </div>
+    </div>
+
+    <div id="card-overlay">
+        <div class="action-card" id="card-content"></div>
+    </div>
+
+    <script>
+        const config = {
+            teams: [
+                { id: 0, name: "Phe Thành Phố", color: "#ff4757", budget: 150, happiness: 0, energy: 0, pos: 0 },
+                { id: 1, name: "Phe Nông Thôn", color: "#2ed573", budget: 150, happiness: 0, energy: 0, pos: 0 },
+                { id: 2, name: "Phe Công Nghiệp", color: "#1e90ff", budget: 150, happiness: 0, energy: 0, pos: 0 },
+                { id: 3, name: "Phe Tri Thức", color: "#ffa502", budget: 150, happiness: 0, energy: 0, pos: 0 }
+            ],
+            map: [
+                { name: "KHỞI HÀNH", type: "start" },
+                { name: "Điện Mặt Trời", type: "invest", cost: 30, hap: 10, energy: 20 },
+                { name: "SỰ CỐ MẠNG LƯỚI", type: "event", effect: "hazard" },
+                { name: "Trường Học", type: "invest", cost: 20, hap: 30, energy: 0 },
+                { name: "HẠT NHÂN TỔNG LỰC", type: "invest", cost: 120, hap: 5, energy: 100 },
+                { name: "Trạm Y Tế", type: "invest", cost: 25, hap: 25, energy: 0 },
+                { name: "Điện Gió Bờ Biển", type: "invest", cost: 35, hap: 15, energy: 25 },
+                { name: "HỘI NGHỊ XANH", type: "event", effect: "bonus" },
+                { name: "Vườn Quốc Gia", type: "invest", cost: 40, hap: 35, energy: 0 },
+                { name: "Nghiên Cứu Pin", type: "invest", cost: 50, hap: 10, energy: 40 },
+                { name: "THIÊN TAI", type: "event", effect: "disaster" },
+                { name: "Trung Tâm Khởi Nghiệp", type: "invest", cost: 30, hap: 20, energy: 10 },
+                { name: "Đập Thủy Điện", type: "invest", cost: 60, hap: 10, energy: 50 },
+                { name: "Bảo Tàng Văn Hóa", type: "invest", cost: 15, hap: 20, energy: 0 },
+                { name: "RÒ RỈ HẠT NHÂN", type: "event", effect: "nuclear_leak" },
+                { name: "Hệ Thống Lọc Nước", type: "invest", cost: 30, hap: 25, energy: 5 },
+                { name: "Nông Nghiệp Công Nghệ", type: "invest", cost: 20, hap: 15, energy: 5 },
+                { name: "QUỸ HỖ TRỢ", type: "event", effect: "grant" },
+                { name: "Đại Học Xanh", type: "invest", cost: 35, hap: 30, energy: 0 },
+                { name: "ĐIỂM ĐẾN TƯƠNG LAI", type: "end" }
+            ],
+            turn: 0
+        };
+
+        function startGame() {
+            document.getElementById('intro-layer').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('intro-layer').style.display = 'none';
+                document.getElementById('main-game').style.display = 'grid';
+                renderBoard();
+                renderStats();
+            }, 1000);
+        }
+
+        function renderBoard() {
+            const container = document.getElementById('board-container');
+            config.map.forEach((cell, i) => {
+                const div = document.createElement('div');
+                div.className = 'slot';
+                div.id = `slot-${i}`;
+                div.innerHTML = `<strong style="color:var(--gold)">${cell.name}</strong><div class="slot-label">${cell.type.toUpperCase()}</div><div class="pawn-container" id="pawns-${i}"></div>`;
+                container.appendChild(div);
+            });
+            updatePawns();
+        }
+
+        function updatePawns() {
+            config.teams.forEach(t => {
+                const pawn = document.getElementById(`pawn-${t.id}`) || document.createElement('div');
+                pawn.className = 'pawn';
+                pawn.id = `pawn-${t.id}`;
+                pawn.style.background = t.color;
+                document.getElementById(`pawns-${t.pos}`).appendChild(pawn);
+            });
+        }
+
+        function renderStats() {
+            const list = document.getElementById('teams-list');
+            list.innerHTML = config.teams.map(t => `
+                <div class="team-card" style="border-color:${t.color}">
+                    <div style="display:flex; justify-content:space-between">
+                        <strong>${t.name}</strong>
+                        <span>💰 ${t.budget}</span>
+                    </div>
+                    <div class="bar-bg"><div class="bar-fill" style="width:${t.happiness}%; background:var(--success)"></div></div>
+                    <small>Hạnh phúc: ${t.happiness}%</small>
+                    <div class="bar-bg"><div class="bar-fill" style="width:${Math.min(t.energy, 100)}%; background:#1e90ff"></div></div>
+                    <small>Điện năng: ${t.energy}MW</small>
+                </div>
+            `).join('');
+        }
+
+        function handleRoll() {
+            const dice = Math.floor(Math.random() * 6) + 1;
+            document.getElementById('dice-val').innerText = dice;
+            document.getElementById('dice-btn').disabled = true;
+            
+            let team = config.teams[config.turn];
+            team.pos = (team.pos + dice);
+            if(team.pos >= config.map.length) team.pos = config.map.length - 1;
+            
+            updatePawns();
+            setTimeout(() => triggerCell(team.pos), 800);
+        }
+
+        function triggerCell(pos) {
+            const cell = config.map[pos];
+            const team = config.teams[config.turn];
+            const overlay = document.getElementById('card-overlay');
+            const content = document.getElementById('card-content');
+
+            if(cell.type === 'invest') {
+                content.innerHTML = `
+                    <h2 style="color:var(--gold)">${cell.name}</h2>
+                    <p>Bạn có muốn đầu tư vào dự án này không?</p>
+                    <div style="background:#000; padding:15px; border-radius:10px; margin:20px 0; text-align:left;">
+                        <p>💰 Chi phí: ${cell.cost} tỷ đô</p>
+                        <p>😊 Hạnh phúc: +${cell.hap}%</p>
+                        <p>⚡ Năng lượng: +${cell.energy}MW</p>
+                    </div>
+                    <button class="btn-invest" onclick="invest(true, ${cell.cost}, ${cell.hap}, ${cell.energy})">CHẤP NHẬN</button>
+                    <button class="btn-skip" onclick="invest(false)">BỎ QUA</button>
+                `;
+            } else if (cell.type === 'event') {
+                handleEvent(cell.effect, content);
+            } else {
+                invest(false); // Ô xuất phát hoặc kết thúc
+            }
+            overlay.style.display = 'flex';
+        }
+
+        function handleEvent(effect, content) {
+            let team = config.teams[config.turn];
+            let msg = "";
+            let sub = "";
+
+            switch(effect) {
+                case 'disaster': 
+                    msg = "THIÊN TAI ĐẬP TỚI!"; 
+                    sub = "Biến đổi khí hậu gây thiệt hại nặng. -20 Hạnh phúc.";
+                    team.happiness = Math.max(0, team.happiness - 20);
+                    document.body.classList.add('shake');
+                    break;
+                case 'nuclear_leak':
+                    msg = "SỰ CỐ RÒ RỈ HẠT NHÂN!";
+                    sub = "Chi phí khắc phục khổng lồ. -50 Ngân sách.";
+                    team.budget = Math.max(0, team.budget - 50);
+                    document.body.classList.add('shake');
+                    break;
+                case 'bonus':
+                    msg = "HỘI NGHỊ THÀNH CÔNG";
+                    sub = "Cộng đồng quốc tế hỗ trợ. +20 Ngân sách.";
+                    team.budget += 20;
+                    break;
+                default:
+                    msg = "SỰ KIỆN BẤT NGỜ";
+                    sub = "Mọi thứ vẫn ổn định.";
+            }
+
+            content.innerHTML = `<h2 style="color:var(--danger)">${msg}</h2><p>${sub}</p><button class="btn-invest" onclick="invest(false)">ĐÃ HIỂU</button>`;
+        }
+
+        function invest(decision, cost, hap, energy) {
+            let team = config.teams[config.turn];
+            if(decision) {
+                if(team.budget >= cost) {
+                    team.budget -= cost;
+                    team.happiness += hap;
+                    team.energy += energy;
+                } else {
+                    alert("Không đủ ngân sách!");
+                }
+            }
+
+            document.getElementById('card-overlay').style.display = 'none';
+            document.body.classList.remove('shake');
+            
+            // Chuyển lượt
+            config.turn = (config.turn + 1) % 4;
+            document.getElementById('turn-display').innerText = `Đến lượt: ${config.teams[config.turn].name}`;
+            document.getElementById('turn-display').style.color = config.teams[config.turn].color;
+            document.getElementById('dice-btn').disabled = false;
+            
+            renderStats();
+            checkWinner();
+        }
+
+        function checkWinner() {
+            const winner = config.teams.find(t => t.happiness >= 100);
+            if(winner) {
+                alert(`CHÚC MỪNG ${winner.name} ĐÃ CHIẾN THẮNG!\nQuốc gia của bạn đạt điểm Cân bằng lý tưởng.`);
+                location.reload();
+            }
+        }
+    </script>
+</body>
+  </html>
+  
